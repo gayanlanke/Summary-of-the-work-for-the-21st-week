@@ -1,0 +1,163 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{makeidx}
+\usepackage{graphicx}
+\usepackage{gensymb}
+%% for cell combination in tables in Overleaf
+\usepackage{makecell}
+
+\usepackage[left=2cm,right=2cm,top=2cm,bottom=2cm]{geometry}
+%\usepackage{cite}
+\usepackage{xcolor}
+
+
+\title{\large\textbf{ Summary of the work carried in Week 21: from 07/12/2019 to 13/12/2019} }
+\author{\small Gayan Lankeshwara}
+\date{\small \today}
+
+\setlength\parindent{0pt} %% changing the style to have no indentation
+
+\begin{document}
+
+\maketitle
+
+During this week, my attention was focussed on the following sections.
+\begin{itemize}
+    \item Fine tuning the optimisation problem to get a set of feasible solutions.
+    \item Reading the existing literature on the demand response mainly concerned with the contribution from Thermal appliances.
+    \item Continue drafting the research paper that Dr. Rahul asked me to work on.
+    \item Obtaining the additional details to model the residential network in OpenDSS.
+\end{itemize}
+
+\section*{\large Current progress of my work}
+
+\subsection*{\small Work on optimisation for the appliance selection process}
+
+Currently I am in the process of developing an optimisation approach to choose the set of appliances in a specific cluster which are going to participate in a demand response event. Just to summarise the MILP optimisation problem that I have formulated upto now,\\
+
+\begin{equation}
+    F =\, min \sum_{t} \sum_{i} [\alpha \, C_{i}\cdot P_{i,t} + \beta\, CI_{i,t}] \quad \quad \forall \: i,t
+\end{equation}
+\\
+\textbf{Decision variables : $P_{i,t}$ and $T_{i,t}^{room}$}\\
+
+\noindent $\alpha$ and $\beta$ are weighting parameters.\\
+
+The decision variable are considered to be $P_{i,t}$ and $T_{i,t}^{room}$. Actually $T_{i,t}^{room}$ was mainly considered to make the optimisation problem less complex with reduced constraints.\\
+
+\subsection*{\small Constraints}
+\begin{align}
+    \label{eq: power_balance}
+    \sum\limits_{i} P_{i,t} &= P_{i,t}^{demand} \quad \forall t \\
+     \label{eq: CI_intro}
+    CI_{i,t} &= \frac{2T_{i,t}^{room}- T_{i}^{low}-T_{i}^{high}}{T_{i}^{high}-T_{i}^{low}} \quad \quad \forall \: i,t\\
+     \label{eq: Temp_limits}
+    T_{i}^{low} &\leq T_{i,t}^{room} \leq  T_{i}^{upper}\quad \quad \forall \: i,t \\
+    \label{eq: Power_limits}
+    P_{i}^{min} &\leq P_{i,t} \leq  P_{i}^{max}  \quad \quad \forall \: i,t \\
+     \label{eq: Indoor_temp_model}
+    T_{i,t}^{room} &= T_{i,t}^{out} - Q_{i,t}\cdot R_{i} - (T_{i,t}^{out} - Q_{i,t}\cdot R_{i}
+    - T_{i,t-1}^{room})\cdot e^{-\frac{\Delta T}{R_{i}C_{i}}}  \quad \quad \forall \: i,t\\
+    \label{eq: Inverter_AC_model}
+    Q_{i,t} &= \frac{c_{i}}{a_{i}}\cdot P_{i,t} + \frac{a_{i}\, c_{i}- b_{i}\, d_{i}}{a_{i}} \quad \quad \forall \: i,t \\
+    \label{eq: power_levels_for_apps}
+    P_{i,t} &= \{0.50\cdot P{i}^{rated}, 0.75\cdot P{i}^{rated}, P{i}^{rated} \}
+  \end{align}
+    
+With the constraint \eqref{eq: power_levels_for_apps}, the optimisation problem becomes MILP.\\
+
+Initially, I could not solve the optimisation problem due to an in-feasibility issue, which was mainly with the constraint \eqref{eq: Indoor_temp_model}. The Indoor temperature calculated with \eqref{eq: Indoor_temp_model} was not within the limits in constraint \eqref{eq: Temp_limits}. Somehow, I was able to solve the issue after modifying the parameters to \eqref{eq: Indoor_temp_model} properly. \\
+
+At the same time, apart from the decision variables discussed in the optimisation problem, I included the state of the appliance (whether ON or OFF) as another variable. \\
+
+Once I added that decision variable as well, \textbf{I am still not sure whether the indoor temperature model that I am using for the Inverter type air conditioner \cite{7890446}  % add the reference 
+is accurate enough.}\\
+
+In the mean time, instead of taking into account a linear cost function for the aggregator, it would be realistic if we are able to in cooperate a quadratic cost function such as, \begin{equation*}
+    C_{i,t}(P_{i,t})= a_{i,t}\, P_{i,t}^2 + b_{i,t}\,P_{i,t} + c_{i,t}  
+\end{equation*}
+where,\\
+$a_{i,t}$, $b_{i,t}$ and $c_{i,t}$ are time-dependent parameters.\\
+
+The main problem we have to face when we consider a quadratic cost function is, the optimisation problem turns to be a MIQP, which is usually NP-hard in nature as the number of decision variables increases.\\
+
+At the same time I implemented this MIQP problem in YALMIP with $N_{app}=10$ and tried to solve with CPLEX \cite{cplex} as well as MOSEK. Even with only 10 appliances MOSEK \cite{mosek} was not able to solve the problem whereas CPLEX solved the problem within 5 seconds. \\
+
+One other thing that we need to pay attention is assigning proper weights to the objectives in the optimisation problem, it will significantly reflect the aggregator's attitude towards minimising the cost and maximising the comfort for the customers.\\
+
+Since we are considering a centralised aggregator based approach, it is vital to develop the optimisation problem with minimum constraints possible, otherwise the problem will be hard to solve as the number of appliances increase. 
+    
+\subsection*{\small Modelling the residential distribution network }
+
+At the same time, I am in the process of modelling the residential distribution network (for the residential area where we already have the smart meter data). Some of the data which is currently that I have up to now,
+
+
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{||c c||} 
+\hline
+ Data & Description  \\ [0.5ex] 
+ \hline\hline
+ Distribution Transformer data & Only for two Michelton transformers \\ 
+ \hline
+ Substation transformer and the feeders & N/A  \\
+ \hline
+ Conductor details &\makecell{Length from the transformer to \\ the pole where a house is connected,}   \\
+ \hline
+Phase connection & For 70 houses connected to both the transformers \\
+ \hline
+    \end{tabular}
+    \caption{Modelling data for the network}
+    \label{tab:OpenDSS_data}
+\end{table}
+
+Some additional data that I require to model the network are,
+\begin{itemize}
+    \item Short circuit levels of the network (for the source in OpenDSS $\Longleftrightarrow$ $ISC_1$ and $ISC_3$ or impedance levels )
+    \item Sequence impedance for some of the conductor types
+\end{itemize}
+
+\emph{Along with the work mentioned above, at the same time I am working on obtaining the residential appliance specific data with the help of the UK- DALE dataset \cite{UK-DALE}. The reason for that is, up to now I do not have a proper Disaggregation algorithm to diaggregate REDBACK smart meter data.}
+
+
+\section*{\large Problems/ Issues that I have}
+
+\begin{itemize}
+    \item \textcolor{red}{Up to now very limited number of publications are available on modelling indoor temperature with Inverter type air conditioners. I used the data from one of them for modelling, but I need to verify whether the approach is accurate enough ?} 
+    
+    \item \textcolor{red}{If I am going to occupy a quadratic cost function for the aggregator, how can I minimise the computational complexity of the optimisation approach.}
+    
+\end{itemize}
+
+\section*{\large Important facts from the existing literature}
+
+The authors in \cite{DBLP:journals/corr/MhannaCV16}
+argues that the centralised algorithm for demand response has scalability issues with the increasing number of appliances considered for the demand response, even before that the communication overheads are expensive.
+
+In another work of the same authors \cite{8106725}, they consider different types of loads for the demand response and introduce different discomfort criteria for them. 
+For thermal control loads the dissatisfaction is identified as,
+\begin{equation}
+    Dist_{therm,i,t} = \gamma_{therm,i}\cdot \{T_{in,t} - T_{desired,i}\}^2
+\end{equation}
+
+For time-shiftable loads the dissatisfaction is identified as,
+
+\begin{equation}
+        Dist_{i,t}=
+        \left\{ \begin{array}{ll}
+            0 & \text{if}\quad t \in [t_{start}, t_{end}]\\
+           \gamma_{def,i}\cdot \{t - t_{end,i}\} &\text{if}\quad t\,>\,t_{end}\\
+           \gamma_{def,i}\cdot \{t_{start,i}-t\} &\text{if}\quad t\,<\,t_{start}
+        \end{array} \right.
+    \end{equation}
+
+
+\bibliographystyle{ieeetr}
+\bibliography{references}
+
+
+
+\end{document}
